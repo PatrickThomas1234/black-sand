@@ -1,0 +1,39 @@
+[project]
+name = "blacksand"
+version = "0.1.0"
+description = "AI-gestütztes Social-Media-Analyse-System (Phase 1: Instagram-Ingestion)"
+requires-python = ">=3.11"
+dependencies = [
+    "apify-client>=1.7",
+    "supabase>=2.7",
+    "python-dotenv>=1.0",
+    "httpx>=0.27",
+    "streamlit>=1.38",
+    "pandas>=2.2",
+    "altair>=5.4",
+    "faster-whisper>=1.1",
+    "anthropic>=0.40",
+]
+
+[project.scripts]
+bs-apply-schema = "blacksand.cli.apply_schema:main"
+bs-ingest = "blacksand.cli.ingest:main"
+bs-refresh = "blacksand.cli.refresh:main"
+bs-score = "blacksand.cli.score:main"
+bs-transcribe = "blacksand.cli.transcribe:main"
+bs-backfill = "blacksand.cli.backfill:main"
+bs-analyze = "blacksand.cli.analyze:main"
+bs-insights = "blacksand.cli.insights:main"
+bs-forecast = "blacksand.cli.forecast:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/blacksand"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.6",
+]
