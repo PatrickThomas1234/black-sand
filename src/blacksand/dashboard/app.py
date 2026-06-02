@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-st.set_page_config(page_title="Black Sand", page_icon="🏖️", layout="wide")
+st.set_page_config(page_title="Blacksand", page_icon="🏖️", layout="wide")
 
 from blacksand.dashboard.pages_ import (  # noqa: E402
     audience,

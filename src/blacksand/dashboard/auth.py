@@ -29,7 +29,7 @@ def require_login() -> None:
     if st.session_state.get("bs_authed"):
         return
 
-    st.markdown("## 🔒 Black Sand")
+    st.markdown("## 🔒 Blacksand")
     st.caption("Bitte einloggen.")
     with st.form("bs_login"):
         entered = st.text_input("Passwort", type="password")
