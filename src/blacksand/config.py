@@ -33,6 +33,9 @@ class Settings:
     supabase_anon_key: str
     apify_token: str
     apify_instagram_actor: str
+    apify_tiktok_actor: str
+    apify_tiktok_comments_actor: str
+    apify_tiktok_hashtag_actor: str
     whisper_model: str
     anthropic_api_key: str
     anthropic_model: str
@@ -49,6 +52,13 @@ def get_settings() -> Settings:
         apify_token=os.getenv("APIFY_TOKEN", ""),
         apify_instagram_actor=os.getenv(
             "APIFY_INSTAGRAM_ACTOR", "apify/instagram-scraper"
+        ),
+        apify_tiktok_actor=os.getenv("APIFY_TIKTOK_ACTOR", "clockworks/tiktok-scraper"),
+        apify_tiktok_comments_actor=os.getenv(
+            "APIFY_TIKTOK_COMMENTS_ACTOR", "clockworks/tiktok-comments-scraper"
+        ),
+        apify_tiktok_hashtag_actor=os.getenv(
+            "APIFY_TIKTOK_HASHTAG_ACTOR", "clockworks/tiktok-hashtag-scraper"
         ),
         whisper_model=os.getenv("WHISPER_MODEL", "small"),
         anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", ""),

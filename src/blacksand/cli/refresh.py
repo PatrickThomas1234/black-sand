@@ -14,7 +14,8 @@ from ..refresh import refresh_all, refresh_profile
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Black Sand — Metrik-Refresh (Velocity)")
-    parser.add_argument("username", nargs="?", help="Instagram-Username (ohne @)")
+    parser.add_argument("username", nargs="?", help="Username (ohne @)")
+    parser.add_argument("--platform", default="instagram", choices=["instagram", "tiktok"])
     parser.add_argument("--all", action="store_true", help="Alle Profile refreshen")
     parser.add_argument("--max-posts", type=int, default=200)
     args = parser.parse_args()
@@ -24,7 +25,7 @@ def main() -> None:
         total = sum(r.get("snapshots", 0) for r in res)
         print(f"\n✓ {len(res)} Profile, {total} neue Snapshots.")
     elif args.username:
-        r = refresh_profile(args.username, max_posts=args.max_posts)
+        r = refresh_profile(args.username, max_posts=args.max_posts, platform=args.platform)
         print(f"\n✓ {r['snapshots']} neue Snapshots für @{r['profile']}.")
     else:
         parser.error("Bitte einen Username angeben oder --all verwenden.")

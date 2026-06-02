@@ -8,7 +8,9 @@ import streamlit as st
 
 from blacksand.analytics import velocity_summary
 from blacksand.dashboard.shared import (
+    RATING_LEGENDE,
     RATING_ORDER,
+    SCORE_HELP,
     rating_scale,
     require_df,
     require_profile,
@@ -20,6 +22,8 @@ def render() -> None:
     df = require_df(profile)
 
     st.title(f"📊 Übersicht — {profile.get('full_name') or profile['username']}")
+    st.caption("Der Gesamtüberblick: Kennzahlen, Performance-Verteilung und deine "
+               "stärksten/schwächsten Posts auf einen Blick.")
     st.caption(f"@{profile['username']} · {profile['platform']}")
 
     c1, c2, c3, c4, c5 = st.columns(5)
@@ -68,6 +72,9 @@ def render() -> None:
             )
 
     st.divider()
+    st.markdown("**Top & Flop nach Performance-Score**")
+    st.caption("ℹ️ " + SCORE_HELP)
+    st.caption(RATING_LEGENDE)
     col_top, col_flop = st.columns(2)
     ranked = df.dropna(subset=["zscore"]).sort_values("zscore", ascending=False)
 
@@ -82,7 +89,7 @@ def render() -> None:
 
     st.divider()
     st.markdown("**📈 Engagement-Velocity**")
-    vs = velocity_summary(profile["username"])
+    vs = velocity_summary(profile["username"], profile.get("platform"))
     if vs.empty:
         st.caption("Noch keine Metriken erfasst.")
     else:
@@ -107,6 +114,6 @@ def render() -> None:
 def _post_line(r: pd.Series) -> None:
     views = f" 👁{int(r['views'])}" if pd.notna(r["views"]) else ""
     st.markdown(
-        f"**z={r['zscore']:.2f}** · ER {r['engagement_rate']:.2f}% · {r['post_type']} · "
+        f"**Score {r['zscore']:+.2f}** · ER {r['engagement_rate']:.2f}% · {r['post_type']} · "
         f"👍{r['likes']} 💬{r['comments']}{views}  \n_{(r['caption'] or '')[:80]}_"
     )

@@ -42,3 +42,25 @@ def tool_call(system: str, user: str, tool: dict, max_tokens: int = 2000) -> dic
         if block.type == "tool_use":
             return block.input
     raise RuntimeError("Kein tool_use im Claude-Response.")
+
+
+def tool_call_multimodal(
+    system: str, content_blocks: list, tool: dict, max_tokens: int = 1500
+) -> dict:
+    """Wie tool_call, aber die User-Message besteht aus Content-Blöcken
+    (Bilder + Text). Für Vision-Analysen."""
+    s = get_settings()
+    resp = get_anthropic().messages.create(
+        model=s.anthropic_model,
+        max_tokens=max_tokens,
+        system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
+        tools=[tool],
+        tool_choice={"type": "tool", "name": tool["name"]},
+        messages=[{"role": "user", "content": content_blocks}],
+    )
+    if resp.stop_reason == "max_tokens":
+        raise RuntimeError("Vision-Antwort am Token-Limit abgeschnitten.")
+    for block in resp.content:
+        if block.type == "tool_use":
+            return block.input
+    raise RuntimeError("Kein tool_use im Vision-Response.")

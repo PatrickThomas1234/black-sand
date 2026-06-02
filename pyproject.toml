@@ -13,16 +13,30 @@ dependencies = [
     "altair>=5.4",
     "faster-whisper>=1.1",
     "anthropic>=0.40",
+    "fastembed>=0.8.0",
+    "scikit-learn>=1.8.0",
 ]
 
 [project.scripts]
 bs-apply-schema = "blacksand.cli.apply_schema:main"
 bs-ingest = "blacksand.cli.ingest:main"
 bs-refresh = "blacksand.cli.refresh:main"
+bs-competitors = "blacksand.cli.competitors:main"
+bs-niche = "blacksand.cli.niche:main"
+bs-embed = "blacksand.cli.embed:main"
+bs-model = "blacksand.cli.model:main"
+bs-backtest = "blacksand.cli.backtest:main"
+bs-early = "blacksand.cli.early:main"
+bs-radar = "blacksand.cli.radar:main"
+bs-generate = "blacksand.cli.generate:main"
+bs-calendar = "blacksand.cli.calendar_plan:main"
 bs-score = "blacksand.cli.score:main"
 bs-transcribe = "blacksand.cli.transcribe:main"
 bs-backfill = "blacksand.cli.backfill:main"
+bs-comments = "blacksand.cli.comments:main"
 bs-analyze = "blacksand.cli.analyze:main"
+bs-vision = "blacksand.cli.vision:main"
+bs-audience = "blacksand.cli.audience:main"
 bs-insights = "blacksand.cli.insights:main"
 bs-forecast = "blacksand.cli.forecast:main"
 

@@ -11,6 +11,7 @@ def render() -> None:
     profile = require_profile()
     df = require_df(profile)
     st.title("📚 Transkripte")
+    st.caption("Der komplette gesprochene Inhalt deiner Videos — durchsuchbar und als Download.")
 
     tmask = df["transcript"].notna() & df["transcript"].fillna("").str.strip().ne("")
     tdf = df[tmask].sort_values("posted_at", ascending=False)

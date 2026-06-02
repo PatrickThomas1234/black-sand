@@ -18,19 +18,36 @@ RATING_COLOR = {
 }
 PLATFORM_ICON = {"instagram": "📸", "youtube": "▶️", "linkedin": "💼", "tiktok": "🎵"}
 
+# Einheitliche, laienverständliche Erklärung des Performance-Scores (z-Score)
+SCORE_LABEL = "Score"
+SCORE_HELP = (
+    "Performance-Score eines Posts **relativ zum eigenen Kanal-Durchschnitt** "
+    "(statistisch: z-Score in Standardabweichungen). "
+    "0 = genau Durchschnitt · +1 = deutlich überdurchschnittlich · "
+    "+2 = Top-Post · negativ = unter dem Schnitt. "
+    "Bei Videos fließen Engagement UND Reichweite (Views/Follower) ein."
+)
+RATING_LEGENDE = (
+    "🚀 viral (weit über Schnitt) · ✅ good (über Schnitt) · ➖ avg (Durchschnitt) · "
+    "🔻 below (unter Schnitt) · ❌ flop (weit unter Schnitt) — jeweils **bezogen auf "
+    "diesen Kanal**, nicht absolut."
+)
+
 
 @st.cache_data(ttl=60)
 def get_profiles() -> list[dict]:
-    return list_profiles()
+    # Nur eigene/primäre Accounts im Dropdown — Konkurrenten erscheinen nur
+    # auf der Konkurrenz-Seite, nicht in der globalen Account-Auswahl.
+    return list_profiles(role="primary")
 
 
 @st.cache_data(ttl=60)
-def _records(username: str) -> list[dict]:
-    return profile_dataframe(username).to_dict("records")
+def _records(username: str, platform: str | None = None) -> list[dict]:
+    return profile_dataframe(username, platform).to_dict("records")
 
 
-def load_df(username: str) -> pd.DataFrame:
-    df = pd.DataFrame(_records(username))
+def load_df(username: str, platform: str | None = None) -> pd.DataFrame:
+    df = pd.DataFrame(_records(username, platform))
     if not df.empty:
         df["posted_at"] = pd.to_datetime(df["posted_at"], utc=True, errors="coerce")
     return df
@@ -80,7 +97,7 @@ def require_profile() -> dict:
 
 
 def require_df(profile: dict) -> pd.DataFrame:
-    df = load_df(profile["username"])
+    df = load_df(profile["username"], profile.get("platform"))
     if df.empty:
         st.info(f"Keine Posts für @{profile['username']}. "
                 f"`uv run bs-ingest {profile['username']}` ausführen.")

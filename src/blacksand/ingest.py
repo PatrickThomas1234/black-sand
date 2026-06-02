@@ -13,8 +13,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from . import apify, normalize
 from .db import get_client
+from .sources import get_source, post_id_of
 
 
 def _coerce_timestamp(value: Any) -> str | None:
@@ -33,33 +33,36 @@ def _clean_row(row: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in row.items() if v is not None}
 
 
-def ingest_profile(username: str, max_posts: int = 200) -> dict[str, Any]:
+def ingest_profile(
+    username: str, max_posts: int = 200, platform: str = "instagram"
+) -> dict[str, Any]:
     db = get_client()
     username = username.strip().lstrip("@")
+    src = get_source(platform)
 
-    print(f"→ Scrape Profil @{username} …")
-    profile_item = apify.scrape_profile(username)
+    print(f"→ [{platform}] Scrape Profil @{username} …")
+    profile_item = src.scrape_profile(username)
     if not profile_item:
-        raise RuntimeError(f"Kein Profil-Item für @{username} erhalten.")
+        raise RuntimeError(f"Kein Profil-Item für @{username} ({platform}) erhalten.")
 
     print(f"→ Scrape bis zu {max_posts} Posts …")
-    post_items = apify.scrape_posts(username, max_posts=max_posts)
+    post_items = src.scrape_posts(username, max_posts=max_posts)
     print(f"  {len(post_items)} Posts erhalten.")
 
     # 2) Roh-Payloads sichern
     db.table("raw_payloads").insert(
         [
             {
-                "source": "apify:instagram-scraper",
+                "source": src.raw_source,
                 "entity_type": "profile",
                 "entity_ref": username,
                 "payload": profile_item,
             },
             *[
                 {
-                    "source": "apify:instagram-scraper",
+                    "source": src.raw_source,
                     "entity_type": "post",
-                    "entity_ref": normalize._first(p, "shortCode", "id"),
+                    "entity_ref": post_id_of(p, src),
                     "payload": p,
                 }
                 for p in post_items
@@ -68,7 +71,7 @@ def ingest_profile(username: str, max_posts: int = 200) -> dict[str, Any]:
     ).execute()
 
     # 3) Profil upserten
-    profile_row = _clean_row(normalize.normalize_profile(profile_item))
+    profile_row = _clean_row(src.normalize_profile(profile_item))
     profile_row["last_scraped_at"] = datetime.now(timezone.utc).isoformat()
     res = (
         db.table("profiles")
@@ -81,7 +84,7 @@ def ingest_profile(username: str, max_posts: int = 200) -> dict[str, Any]:
     # 4) Posts upserten
     post_rows: list[dict[str, Any]] = []
     for p in post_items:
-        row = normalize.normalize_post(p, profile_id)
+        row = src.normalize_post(p, profile_id)
         if not row.get("platform_post_id"):
             continue
         row["posted_at"] = _coerce_timestamp(row.get("posted_at"))
@@ -97,18 +100,16 @@ def ingest_profile(username: str, max_posts: int = 200) -> dict[str, Any]:
         .upsert(post_rows, on_conflict="platform,platform_post_id")
         .execute()
     )
-    # shortcode → post_id
     id_by_pid = {r["platform_post_id"]: r["id"] for r in res.data}
     print(f"  {len(res.data)} Posts gespeichert.")
 
     # 5) Metric-Snapshots
     snapshots: list[dict[str, Any]] = []
     for p in post_items:
-        pid = normalize._first(p, "shortCode", "shortcode", "id", "code")
-        post_id = id_by_pid.get(pid)
+        post_id = id_by_pid.get(post_id_of(p, src))
         if not post_id:
             continue
-        metrics = _clean_row(normalize.extract_metrics(p))
+        metrics = _clean_row(src.extract_metrics(p))
         metrics["post_id"] = post_id
         snapshots.append(metrics)
 

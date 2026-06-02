@@ -13,10 +13,11 @@ from ..insights import build_playbook
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Black Sand — Content-Playbook")
-    parser.add_argument("username", help="Instagram-Username (ohne @)")
+    parser.add_argument("username", help="Username (ohne @)")
+    parser.add_argument("--platform", default="instagram", choices=["instagram", "tiktok"], help="Plattform")
     args = parser.parse_args()
 
-    res = build_playbook(args.username)
+    res = build_playbook(args.username, platform=args.platform)
     pb = res["playbook"]
     print(f"\n=== PLAYBOOK @{args.username} ===\n")
     print(pb.get("summary", ""), "\n")

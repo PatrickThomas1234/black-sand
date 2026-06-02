@@ -34,7 +34,10 @@ def _model():
 
 
 def _video_url_for(post: dict[str, Any], db) -> str | None:
-    """videoUrl aus dem jüngsten Roh-Payload des Posts ziehen."""
+    """Video-URL ermitteln — bevorzugt die normalisierte media_url (plattform-
+    übergreifend), Fallback auf IG-Roh-Feld videoUrl."""
+    if post.get("media_url"):
+        return post["media_url"]
     raw = (
         db.table("raw_payloads")
         .select("payload")
@@ -46,7 +49,8 @@ def _video_url_for(post: dict[str, Any], db) -> str | None:
         .data
     )
     if raw:
-        return raw[0]["payload"].get("videoUrl")
+        p = raw[0]["payload"]
+        return p.get("videoUrl") or p.get("downloadAddr") or p.get("playAddr")
     return None
 
 
@@ -84,17 +88,22 @@ def transcribe_one(post: dict[str, Any], db) -> dict[str, Any] | None:
     return row
 
 
-def transcribe_profile(username: str, limit: int | None = None, redo: bool = False) -> dict[str, Any]:
+def transcribe_profile(
+    username: str, limit: int | None = None, redo: bool = False, platform: str | None = None
+) -> dict[str, Any]:
     db = get_client()
     username = username.strip().lstrip("@")
 
-    prof = db.table("profiles").select("id").eq("username", username).execute().data
+    q = db.table("profiles").select("id").eq("username", username)
+    if platform:
+        q = q.eq("platform", platform)
+    prof = q.execute().data
     if not prof:
         raise RuntimeError(f"Profil @{username} nicht in der DB.")
 
     posts = (
         db.table("posts")
-        .select("id,platform_post_id,is_video,post_type,caption")
+        .select("id,platform_post_id,is_video,post_type,caption,media_url")
         .eq("profile_id", prof[0]["id"])
         .eq("is_video", True)
         .execute()

@@ -137,14 +137,17 @@ def _normalize_playbook(pb: dict[str, Any]) -> dict[str, Any]:
     return pb
 
 
-def build_playbook(username: str) -> dict[str, Any]:
+def build_playbook(username: str, platform: str | None = None) -> dict[str, Any]:
     db = get_client()
     username = username.strip().lstrip("@")
-    prof = db.table("profiles").select("id").eq("username", username).execute().data
+    q = db.table("profiles").select("id").eq("username", username)
+    if platform:
+        q = q.eq("platform", platform)
+    prof = q.execute().data
     if not prof:
         raise RuntimeError(f"Profil @{username} nicht in der DB.")
 
-    agg = feature_aggregates(username)
+    agg = feature_aggregates(username, platform)
     if not agg:
         raise RuntimeError("Keine Daten für Aggregate — erst ingesten/scoren.")
 
@@ -169,9 +172,12 @@ def build_playbook(username: str) -> dict[str, Any]:
     return {"playbook": playbook, "aggregates": agg}
 
 
-def latest_playbook(username: str) -> dict | None:
+def latest_playbook(username: str, platform: str | None = None) -> dict | None:
     db = get_client()
-    prof = db.table("profiles").select("id").eq("username", username.strip().lstrip("@")).execute().data
+    q = db.table("profiles").select("id").eq("username", username.strip().lstrip("@"))
+    if platform:
+        q = q.eq("platform", platform)
+    prof = q.execute().data
     if not prof:
         return None
     rows = (

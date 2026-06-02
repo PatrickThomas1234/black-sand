@@ -28,7 +28,7 @@ def render() -> None:
         return
 
     with st.spinner("Claude prognostiziert …"):
-        f = forecast_post(profile["username"], draft, post_type=ftype)
+        f = forecast_post(profile["username"], draft, post_type=ftype, platform=profile.get("platform"))
 
     c1, c2, c3 = st.columns(3)
     c1.metric("Prognose-Rating", f["predicted_rating"].upper(), help=_RATING_HELP)

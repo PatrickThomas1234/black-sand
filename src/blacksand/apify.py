@@ -51,6 +51,21 @@ def scrape_profile(username: str) -> dict[str, Any] | None:
     return items[0] if items else None
 
 
+def scrape_hashtag(tag: str, limit: int = 30) -> list[dict[str, Any]]:
+    """Aktuelle Top-Posts zu einem Hashtag (für Konkurrenz-Discovery)."""
+    s = get_settings()
+    tag = tag.lstrip("#")
+    return _run(
+        s.apify_instagram_actor,
+        {
+            "directUrls": [f"https://www.instagram.com/explore/tags/{tag}/"],
+            "resultsType": "posts",
+            "resultsLimit": limit,
+            "searchType": "hashtag",
+        },
+    )
+
+
 def scrape_posts(username: str, max_posts: int = 200) -> list[dict[str, Any]]:
     """Bis zu `max_posts` Posts des Profils holen."""
     s = get_settings()
@@ -63,4 +78,60 @@ def scrape_posts(username: str, max_posts: int = 200) -> list[dict[str, Any]]:
             "searchType": "user",
             "addParentData": False,
         },
+    )
+
+
+# --- TikTok (clockworks/tiktok-scraper) ----------------------------------
+# Der Actor liefert pro Video ein Item; die Profil-Metadaten stecken in
+# item["authorMeta"]. Ein Run reicht für Profil + Posts.
+
+def scrape_tiktok_posts(username: str, max_posts: int = 100) -> list[dict[str, Any]]:
+    s = get_settings()
+    return _run(
+        s.apify_tiktok_actor,
+        {
+            "profiles": [username.lstrip("@")],
+            "resultsPerPage": max_posts,
+            # Videos + Cover laden → mediaUrls/Thumbnails verfügbar für Vision & Whisper
+            "shouldDownloadVideos": True,
+            "shouldDownloadCovers": True,
+            "shouldDownloadSubtitles": False,
+            "shouldDownloadSlideshowImages": False,
+        },
+    )
+
+
+def scrape_tiktok_profile(username: str) -> dict[str, Any] | None:
+    """Profil-Metadaten = authorMeta des ersten Video-Items."""
+    items = scrape_tiktok_posts(username, max_posts=1)
+    if not items:
+        return None
+    author = items[0].get("authorMeta")
+    return author if isinstance(author, dict) and author else items[0]
+
+
+def scrape_tiktok_comments(post_urls: list[str], per_post: int = 50) -> list[dict[str, Any]]:
+    """Kommentare zu TikTok-Videos (clockworks/tiktok-comments-scraper)."""
+    if not post_urls:
+        return []
+    s = get_settings()
+    return _run(
+        s.apify_tiktok_comments_actor,
+        {
+            "postURLs": post_urls,
+            "commentsPerPost": per_post,
+            "maxRepliesPerComment": 0,
+        },
+    )
+
+
+def scrape_tiktok_hashtag(tag: str, limit: int = 50) -> list[dict[str, Any]]:
+    """Aktuelle Videos zu einem TikTok-Hashtag (für Konkurrenz-Discovery).
+
+    Items enthalten authorMeta (Follower/Bio) → Ranking ohne Extra-Scrape möglich.
+    """
+    s = get_settings()
+    return _run(
+        s.apify_tiktok_hashtag_actor,
+        {"hashtags": [tag.lstrip("#")], "resultsPerPage": limit},
     )

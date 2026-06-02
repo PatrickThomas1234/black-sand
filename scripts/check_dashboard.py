@@ -14,7 +14,8 @@ from streamlit.testing.v1 import AppTest
 
 from blacksand.analytics import list_profiles
 
-PAGE_NAMES = ["overview", "posts", "playbook", "forecast", "transcripts"]
+PAGE_NAMES = ["overview", "posts", "audience", "playbook", "forecast", "trends",
+              "competitors", "niche", "transcripts"]
 
 problems: list[str] = []
 

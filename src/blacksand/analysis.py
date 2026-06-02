@@ -156,10 +156,15 @@ def _gather_posts(db, profile_id: str) -> list[dict[str, Any]]:
     return posts
 
 
-def analyze_profile(username: str, limit: int | None = None, redo: bool = False) -> dict[str, Any]:
+def analyze_profile(
+    username: str, limit: int | None = None, redo: bool = False, platform: str | None = None
+) -> dict[str, Any]:
     db = get_client()
     username = username.strip().lstrip("@")
-    prof = db.table("profiles").select("id").eq("username", username).execute().data
+    q = db.table("profiles").select("id").eq("username", username)
+    if platform:
+        q = q.eq("platform", platform)
+    prof = q.execute().data
     if not prof:
         raise RuntimeError(f"Profil @{username} nicht in der DB.")
 

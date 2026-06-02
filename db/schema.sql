@@ -14,6 +14,7 @@
 create table if not exists profiles (
   id               uuid primary key default gen_random_uuid(),
   platform         text not null check (platform in ('instagram','youtube','linkedin','tiktok')),
+  role             text not null default 'primary' check (role in ('primary','competitor')),
   platform_user_id text,
   username         text not null,
   full_name        text,
@@ -118,6 +119,9 @@ create table if not exists performance_scores (
   details         jsonb
 );
 create index if not exists performance_scores_post_idx on performance_scores (post_id);
+alter table performance_scores add column if not exists view_rate   numeric;
+alter table performance_scores add column if not exists view_zscore numeric;
+alter table performance_scores add column if not exists algo_zscore numeric;
 
 -- ---------------------------------------------------------------------------
 -- raw_payloads — every raw scraper response, for reproducibility / re-parsing
@@ -136,6 +140,7 @@ create index if not exists raw_payloads_ref_idx on raw_payloads (source, entity_
 -- Phase 2b — zusätzliche strukturierte Felder + Kommentare
 -- ("alle Daten, die wir bekommen können", als Features fürs spätere Forecasting)
 -- ---------------------------------------------------------------------------
+alter table profiles add column if not exists role text not null default 'primary';
 alter table posts add column if not exists music             jsonb;
 alter table posts add column if not exists tagged_usernames  text[];
 alter table posts add column if not exists dimensions        jsonb;
@@ -167,3 +172,32 @@ create table if not exists profile_insights (
   created_at  timestamptz not null default now()
 );
 create index if not exists profile_insights_idx on profile_insights (profile_id, created_at desc);
+
+-- ---------------------------------------------------------------------------
+-- Visuelle Inhaltsanalyse (Claude Vision) — was im Bild/Video passiert
+-- ---------------------------------------------------------------------------
+create table if not exists visual_analysis (
+  id          uuid primary key default gen_random_uuid(),
+  post_id     uuid not null references posts(id) on delete cascade,
+  model       text,
+  source      text,          -- 'image' | 'carousel' | 'video_frames'
+  n_images    int,
+  payload     jsonb not null,
+  created_at  timestamptz not null default now()
+);
+create unique index if not exists visual_analysis_post_uidx on visual_analysis (post_id);
+
+-- ---------------------------------------------------------------------------
+-- Embeddings (pgvector) — semantische Post-Vektoren für Ähnlichkeits-Prognose
+-- Modell: paraphrase-multilingual-MiniLM-L12-v2 (384-dim, mehrsprachig)
+-- ---------------------------------------------------------------------------
+create extension if not exists vector;
+
+create table if not exists post_embeddings (
+  post_id    uuid primary key references posts(id) on delete cascade,
+  model      text not null,
+  embedding  vector(384) not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists post_embeddings_hnsw
+  on post_embeddings using hnsw (embedding vector_cosine_ops);

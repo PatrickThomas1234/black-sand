@@ -13,13 +13,15 @@ from blacksand.insights import build_playbook, latest_playbook
 def render() -> None:
     profile = require_profile()
     st.title("🎯 Content-Playbook")
+    st.caption("Dein datenbasiertes Erfolgsrezept: was funktioniert, was nicht, plus "
+               "konkrete Empfehlungen und nächste Post-Ideen.")
 
-    pb = latest_playbook(profile["username"])
+    pb = latest_playbook(profile["username"], profile.get("platform"))
     c_l, c_r = st.columns([3, 1])
     with c_r:
         if st.button("🧠 Playbook generieren", width="stretch"):
             with st.spinner("Claude analysiert die Muster …"):
-                build_playbook(profile["username"])
+                build_playbook(profile["username"], profile.get("platform"))
             st.cache_data.clear()
             st.rerun()
 
@@ -65,19 +67,22 @@ def render() -> None:
     )
 
     st.divider()
-    st.markdown("**📊 Muster (Ø z-Score je Gruppe)**")
+    st.markdown("**📊 Muster: Ø Performance-Score je Gruppe**")
+    st.caption("Balken über 0 (grün) = diese Gruppe performt **über** dem Kanal-Schnitt, "
+               "unter 0 (rot) = darunter. Score = Standardabweichungen vom Kanal-Durchschnitt. "
+               "`n` = Anzahl Posts, `Ø ER` = durchschnittliche Engagement-Rate in %.")
 
     def _chart(key: str, dim: str, title: str):
         rows = agg.get(key, [])
         if not rows:
             return
-        adf = pd.DataFrame(rows)
+        adf = pd.DataFrame(rows).rename(columns={"avg_z": "Ø Score", "avg_er": "Ø ER %", "n": "Posts"})
         st.altair_chart(
             alt.Chart(adf).mark_bar().encode(
                 x=alt.X(f"{dim}:N", sort="-y", title=title),
-                y=alt.Y("avg_z:Q", title="Ø z-Score"),
-                color=alt.condition(alt.datum.avg_z > 0, alt.value("#16a34a"), alt.value("#dc2626")),
-                tooltip=[dim, "n", "avg_z", "avg_er"],
+                y=alt.Y("Ø Score:Q", title="Ø Score (vs. Kanal-Schnitt)"),
+                color=alt.condition(alt.datum["Ø Score"] > 0, alt.value("#16a34a"), alt.value("#dc2626")),
+                tooltip=[dim, "Posts", "Ø Score", "Ø ER %"],
             ).properties(height=220),
             width="stretch",
         )

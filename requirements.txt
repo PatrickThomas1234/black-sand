@@ -1,0 +1,14 @@
+# Laufzeit-Abhängigkeiten für das gehostete Dashboard (Streamlit Cloud / Container).
+# Hinweis: faster-whisper + ffmpeg werden NUR von den lokalen CLIs (Transkription,
+# visuelle Analyse) gebraucht — nicht vom Dashboard. Daher hier bewusst nicht enthalten,
+# um den Web-Deploy schlank zu halten.
+streamlit>=1.38
+pandas>=2.2
+altair>=5.4
+supabase>=2.7
+python-dotenv>=1.0
+httpx>=0.27
+anthropic>=0.40
+fastembed>=0.8.0
+scikit-learn>=1.8.0
+apify-client>=3.0

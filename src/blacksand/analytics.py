@@ -11,10 +11,35 @@ import pandas as pd
 from .db import get_client
 
 
-def metric_history(username: str) -> pd.DataFrame:
+def comments_df(username: str, platform: str | None = None) -> pd.DataFrame:
+    """Alle gespeicherten Kommentare eines Profils (mit Post-Shortcode)."""
+    db = get_client()
+    profile = get_profile(username, platform)
+    if not profile:
+        return pd.DataFrame()
+    posts = (
+        db.table("posts").select("id,platform_post_id")
+        .eq("profile_id", profile["id"]).execute().data
+    )
+    if not posts:
+        return pd.DataFrame()
+    sc = {p["id"]: p["platform_post_id"] for p in posts}
+    rows = (
+        db.table("comments").select("post_id,author,text,like_count,posted_at")
+        .in_("post_id", list(sc)).execute().data
+    )
+    if not rows:
+        return pd.DataFrame()
+    df = pd.DataFrame(rows)
+    df["shortcode"] = df["post_id"].map(sc)
+    df["like_count"] = df["like_count"].fillna(0).astype(int)
+    return df.sort_values("like_count", ascending=False).reset_index(drop=True)
+
+
+def metric_history(username: str, platform: str | None = None) -> pd.DataFrame:
     """Alle Metrik-Snapshots eines Profils (Zeitreihe), inkl. shortcode/post_type."""
     db = get_client()
-    profile = get_profile(username)
+    profile = get_profile(username, platform)
     if not profile:
         return pd.DataFrame()
     posts = (
@@ -47,13 +72,13 @@ def metric_history(username: str) -> pd.DataFrame:
     return df
 
 
-def velocity_summary(username: str) -> pd.DataFrame:
+def velocity_summary(username: str, platform: str | None = None) -> pd.DataFrame:
     """Pro Post: jüngstes Wachstum zwischen den letzten zwei Snapshots.
 
     Spalten: shortcode, post_type, posted_at, n_snapshots, latest_likes,
     delta_likes, delta_hours, likes_per_day, last_captured.
     """
-    hist = metric_history(username)
+    hist = metric_history(username, platform)
     if hist.empty:
         return pd.DataFrame()
 
@@ -87,33 +112,98 @@ def velocity_summary(username: str) -> pd.DataFrame:
     return df.sort_values("posted_at", ascending=False).reset_index(drop=True)
 
 
-def list_profiles() -> list[dict]:
-    db = get_client()
-    return (
-        db.table("profiles")
-        .select("id,username,full_name,platform,follower_count,post_count")
-        .order("username")
-        .execute()
-        .data
-    )
+def profile_summary(username: str, platform: str | None = None) -> dict | None:
+    """Kompakte Kennzahlen eines Profils für den Konkurrenz-Benchmark."""
+    profile = get_profile(username, platform)
+    if not profile:
+        return None
+    df = profile_dataframe(username, platform)
+    er = df["engagement_rate"].dropna() if not df.empty else pd.Series(dtype=float)
+    return {
+        "username": username,
+        "followers": profile.get("follower_count"),
+        "n_posts": int(len(df)),
+        "avg_er": round(float(er.mean()), 2) if not er.empty else None,
+        "median_er": round(float(er.median()), 2) if not er.empty else None,
+        "viral": int((df["rating"] == "viral").sum()) if not df.empty else 0,
+    }
 
 
-def get_profile(username: str) -> dict | None:
+def hype_summary(username: str, platform: str | None = None) -> pd.DataFrame:
+    """Views-Hype-Signal pro Video-Post aus der Snapshot-Zeitreihe.
+
+    Spalten: shortcode, post_type, posted_at, age_days, latest_views,
+    views_per_day_recent (Tempo im letzten Mess-Intervall),
+    views_per_day_life (Lebenszeit-Schnitt), accel (recent/life; >1 = hebt ab),
+    n_snapshots.
+    """
+    hist = metric_history(username, platform)
+    if hist.empty or "views" not in hist:
+        return pd.DataFrame()
+    hist = hist.dropna(subset=["views"])
+    if hist.empty:
+        return pd.DataFrame()
+
+    rows = []
+    for _post_id, g in hist.groupby("post_id"):
+        g = g.sort_values("captured_at")
+        last = g.iloc[-1]
+        posted = last["posted_at"]
+        age_h = None
+        if pd.notna(posted):
+            age_h = (last["captured_at"] - posted).total_seconds() / 3600
+        life_vpd = (last["views"] / age_h * 24) if age_h and age_h > 0 else None
+
+        recent_vpd = None
+        if len(g) >= 2:
+            prev = g.iloc[-2]
+            dv = (last["views"] or 0) - (prev["views"] or 0)
+            dh = (last["captured_at"] - prev["captured_at"]).total_seconds() / 3600
+            if dh > 0:
+                recent_vpd = dv / dh * 24
+
+        accel = None
+        if recent_vpd is not None and life_vpd and life_vpd > 0:
+            accel = round(recent_vpd / life_vpd, 2)
+
+        rows.append({
+            "shortcode": last["shortcode"],
+            "post_type": last["post_type"],
+            "posted_at": posted,
+            "age_days": round(age_h / 24, 1) if age_h else None,
+            "latest_views": int(last["views"]) if pd.notna(last["views"]) else None,
+            "views_per_day_recent": round(recent_vpd) if recent_vpd is not None else None,
+            "views_per_day_life": round(life_vpd) if life_vpd else None,
+            "accel": accel,
+            "n_snapshots": len(g),
+        })
+    df = pd.DataFrame(rows)
+    return df.sort_values("posted_at", ascending=False).reset_index(drop=True)
+
+
+def list_profiles(role: str | None = None) -> list[dict]:
     db = get_client()
-    rows = (
-        db.table("profiles")
-        .select("*")
-        .eq("username", username.strip().lstrip("@"))
-        .execute()
-        .data
+    q = db.table("profiles").select(
+        "id,username,full_name,platform,follower_count,post_count,role"
     )
+    if role:
+        q = q.eq("role", role)
+    return q.order("username").execute().data
+
+
+def get_profile(username: str, platform: str | None = None) -> dict | None:
+    db = get_client()
+    q = db.table("profiles").select("*").eq("username", username.strip().lstrip("@"))
+    if platform:
+        q = q.eq("platform", platform)
+    rows = q.execute().data
     return rows[0] if rows else None
 
 
-def profile_dataframe(username: str) -> pd.DataFrame:
+def profile_dataframe(username: str, platform: str | None = None) -> pd.DataFrame:
     """Ein DataFrame pro Post: Stammdaten + jüngste Metriken + Score."""
     db = get_client()
-    profile = get_profile(username)
+    profile = get_profile(username, platform)
     if not profile:
         return pd.DataFrame()
 
@@ -147,7 +237,7 @@ def profile_dataframe(username: str) -> pd.DataFrame:
     # jüngster Score pro Post
     scores = (
         db.table("performance_scores")
-        .select("post_id,engagement_rate,baseline_zscore,rating,computed_at,details")
+        .select("post_id,engagement_rate,baseline_zscore,algo_zscore,view_rate,view_zscore,rating,computed_at,details")
         .in_("post_id", ids)
         .order("computed_at", desc=True)
         .execute()
@@ -169,6 +259,15 @@ def profile_dataframe(username: str) -> pd.DataFrame:
     )
     an_by = {a["post_id"]: a["analysis"] for a in an}
 
+    vis = (
+        db.table("visual_analysis")
+        .select("post_id,payload")
+        .in_("post_id", ids)
+        .execute()
+        .data
+    )
+    vis_by = {v["post_id"]: v["payload"] for v in vis}
+
     records = []
     for p in posts:
         m = latest_metric.get(p["id"], {})
@@ -185,10 +284,13 @@ def profile_dataframe(username: str) -> pd.DataFrame:
                 "comments": m.get("comments"),
                 "views": m.get("views"),
                 "engagement_rate": sc.get("engagement_rate"),
-                "zscore": sc.get("baseline_zscore"),
+                "zscore": sc.get("algo_zscore") if sc.get("algo_zscore") is not None else sc.get("baseline_zscore"),
+                "eng_zscore": sc.get("baseline_zscore"),
+                "view_rate": sc.get("view_rate"),
                 "rating": sc.get("rating"),
                 "transcript": tr_by.get(p["id"]),
                 "analysis": an_by.get(p["id"]),
+                "visual": vis_by.get(p["id"]),
                 "hashtag_count": len(p.get("hashtags") or []),
                 "tagged_count": len(p.get("tagged_usernames") or []),
                 "uses_original_audio": (p.get("music") or {}).get("uses_original_audio"),
@@ -228,9 +330,9 @@ def _grp(df: pd.DataFrame, by: str) -> list[dict]:
     ]
 
 
-def feature_aggregates(username: str) -> dict:
+def feature_aggregates(username: str, platform: str | None = None) -> dict:
     """Datengetriebene Muster eines Profils — Basis für Playbook & Forecast."""
-    df = profile_dataframe(username)
+    df = profile_dataframe(username, platform)
     if df.empty:
         return {}
 

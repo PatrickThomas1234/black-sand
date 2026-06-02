@@ -43,17 +43,14 @@ def _baseline(values: list[float]) -> tuple[float, float]:
     return statistics.mean(values), statistics.pstdev(values)
 
 
-def score_profile(username: str) -> dict[str, Any]:
+def score_profile(username: str, platform: str | None = None) -> dict[str, Any]:
     db = get_client()
     username = username.strip().lstrip("@")
 
-    prof = (
-        db.table("profiles")
-        .select("id,username,follower_count")
-        .eq("username", username)
-        .execute()
-        .data
-    )
+    q = db.table("profiles").select("id,username,follower_count").eq("username", username)
+    if platform:
+        q = q.eq("platform", platform)
+    prof = q.execute().data
     if not prof:
         raise RuntimeError(f"Profil @{username} nicht in der DB. Erst ingesten.")
     profile = prof[0]
@@ -85,7 +82,7 @@ def score_profile(username: str) -> dict[str, Any]:
     for s in snaps:
         latest.setdefault(s["post_id"], s)
 
-    # Engagement-Rate pro Post
+    # Engagement-Rate + View-Rate (Reichweite) pro Post
     for p in posts:
         m = latest.get(p["id"], {})
         likes = m.get("likes") or 0
@@ -93,15 +90,20 @@ def score_profile(username: str) -> dict[str, Any]:
         p["_likes"], p["_comments"] = likes, comments
         p["_views"] = m.get("views")
         p["_er"] = (likes + comments) / followers * 100
+        # Reichweite: wie weit über die Follower-Basis hinaus ausgespielt (nur Videos)
+        p["_vr"] = (p["_views"] / followers * 100) if p["_views"] else None
 
-    # Baselines: pro Typ + global
+    # Engagement-Baselines: pro Typ + global
     global_er = [p["_er"] for p in posts]
     global_base = _baseline(global_er)
-
     by_type: dict[str, list[float]] = {}
     for p in posts:
         by_type.setdefault(p["post_type"] or "other", []).append(p["_er"])
     type_base = {t: _baseline(v) for t, v in by_type.items()}
+
+    # View-Baseline: über alle Posts mit Views (i.d.R. Videos/Reels)
+    view_vals = [p["_vr"] for p in posts if p["_vr"] is not None]
+    view_base = _baseline(view_vals) if len(view_vals) >= MIN_GROUP else None
 
     # Scoren + speichern
     now = datetime.now(timezone.utc).isoformat()
@@ -110,13 +112,25 @@ def score_profile(username: str) -> dict[str, Any]:
         t = p["post_type"] or "other"
         use_type = len(by_type[t]) >= MIN_GROUP
         mean, std = type_base[t] if use_type else global_base
-        z = (p["_er"] - mean) / std if std > 0 else 0.0
+        eng_z = (p["_er"] - mean) / std if std > 0 else 0.0
+
+        # View-z (Reichweite) nur wenn Views + belastbare Baseline
+        view_z = None
+        if p["_vr"] is not None and view_base and view_base[1] > 0:
+            view_z = (p["_vr"] - view_base[0]) / view_base[1]
+
+        # Algo-Score: bei Videos Mittel aus Engagement- und Reichweiten-z, sonst nur Engagement
+        algo_z = (eng_z + view_z) / 2 if view_z is not None else eng_z
+
         rows.append(
             {
                 "post_id": p["id"],
                 "engagement_rate": round(p["_er"], 4),
-                "baseline_zscore": round(z, 4),
-                "rating": _rating(z),
+                "baseline_zscore": round(eng_z, 4),
+                "view_rate": round(p["_vr"], 4) if p["_vr"] is not None else None,
+                "view_zscore": round(view_z, 4) if view_z is not None else None,
+                "algo_zscore": round(algo_z, 4),
+                "rating": _rating(algo_z),
                 "computed_at": now,
                 "details": {
                     "likes": p["_likes"],
