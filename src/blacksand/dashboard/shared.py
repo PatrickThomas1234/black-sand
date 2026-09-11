@@ -82,6 +82,15 @@ def sidebar_context() -> None:
         st.cache_data.clear()
         st.rerun()
 
+    # Angemeldeter Nutzer + Logout (nur wenn ein Login aktiv ist)
+    user = st.session_state.get("bs_user")
+    if user:
+        st.sidebar.caption(f"👤 Angemeldet als **{user}**")
+        if st.sidebar.button("Abmelden", width="stretch"):
+            st.session_state["bs_authed"] = False
+            st.session_state.pop("bs_user", None)
+            st.rerun()
+
 
 def current_profile() -> dict | None:
     return st.session_state.get("profile")
