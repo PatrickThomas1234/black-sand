@@ -46,6 +46,60 @@ def _users() -> dict[str, str]:
     return {}
 
 
+def _user_profiles() -> dict[str, list[str]]:
+    """Zuordnung Benutzer → erlaubte Profil-Usernames.
+
+    Quellen (wie bei den Nutzern):
+      1. Streamlit-Secrets, Tabelle [user_profiles]: benutzer = "user1, user2"
+         (oder als TOML-Array: benutzer = ["user1", "user2"])
+      2. Env DASHBOARD_USER_PROFILES als JSON: {"benutzer": ["user1", ...]}
+    """
+    raw_map = None
+    # 1) Streamlit-Secrets [user_profiles]
+    try:
+        tbl = st.secrets.get("user_profiles", None)  # type: ignore[attr-defined]
+        if tbl:
+            raw_map = dict(tbl)
+    except Exception:  # noqa: BLE001
+        pass
+    # 2) Env DASHBOARD_USER_PROFILES als JSON
+    if raw_map is None:
+        raw = os.getenv("DASHBOARD_USER_PROFILES", "")
+        if raw:
+            try:
+                raw_map = json.loads(raw)
+            except (ValueError, TypeError):
+                raw_map = None
+    if not raw_map:
+        return {}
+
+    out: dict[str, list[str]] = {}
+    for k, v in raw_map.items():
+        if isinstance(v, str):
+            names = [s.strip() for s in v.split(",") if s.strip()]
+        elif isinstance(v, (list, tuple)):
+            names = [str(s).strip() for s in v if str(s).strip()]
+        else:
+            names = []
+        out[str(k)] = names
+    return out
+
+
+def visible_usernames(user: str | None) -> set[str] | None:
+    """Profil-Usernames, die dieser Nutzer sehen darf.
+
+    Rückgabe ``None`` = keine Einschränkung (Admin/sieht alles). Ist der Nutzer
+    in der Zuordnung eingetragen, sieht er ausschließlich die dort gelisteten
+    Profile (plattformübergreifend nach Username gefiltert).
+    """
+    if not user:
+        return None
+    mapping = _user_profiles()
+    if user in mapping:
+        return set(mapping[user])
+    return None
+
+
 def require_login() -> None:
     users = _users()
     single_pw = _secret("DASHBOARD_PASSWORD")

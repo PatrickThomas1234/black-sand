@@ -7,6 +7,7 @@ import pandas as pd
 import streamlit as st
 
 from blacksand.analytics import list_profiles, profile_dataframe
+from blacksand.dashboard.auth import visible_usernames
 
 RATING_ORDER = ["viral", "good", "avg", "below", "flop"]
 RATING_COLOR = {
@@ -35,10 +36,24 @@ RATING_LEGENDE = (
 
 
 @st.cache_data(ttl=60)
-def get_profiles() -> list[dict]:
-    # Nur eigene/primäre Accounts im Dropdown — Konkurrenten erscheinen nur
-    # auf der Konkurrenz-Seite, nicht in der globalen Account-Auswahl.
+def _all_primary_profiles() -> list[dict]:
+    # Nur eigene/primäre Accounts — Konkurrenten erscheinen nur auf der
+    # Konkurrenz-Seite, nicht in der globalen Account-Auswahl.
     return list_profiles(role="primary")
+
+
+def get_profiles() -> list[dict]:
+    """Primäre Profile, gefiltert auf die für den angemeldeten Nutzer sichtbaren.
+
+    Ist für den Nutzer eine Freigabe hinterlegt (z.B. vitalis → nur vitalis_._),
+    erscheinen ausschließlich diese Profile — plattformübergreifend nach
+    Username. Ohne Freigabe (Admin) werden alle primären Profile gezeigt.
+    """
+    profs = _all_primary_profiles()
+    allowed = visible_usernames(st.session_state.get("bs_user"))
+    if allowed is not None:
+        profs = [p for p in profs if p.get("username") in allowed]
+    return profs
 
 
 @st.cache_data(ttl=60)
