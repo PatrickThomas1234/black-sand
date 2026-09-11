@@ -59,7 +59,7 @@ def rating_scale() -> alt.Scale:
 
 def sidebar_context() -> None:
     """Globaler Plattform-/Account-Wähler; legt das gewählte Profil in den State."""
-    st.sidebar.title("🏖️ Blacksand")
+    st.sidebar.title("🏖️ Social Analyse")
     profiles = get_profiles()
     if not profiles:
         st.sidebar.warning("Keine Profile in der DB.\n`uv run bs-ingest <user>`")

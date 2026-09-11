@@ -54,7 +54,7 @@ def require_login() -> None:
     if st.session_state.get("bs_authed"):
         return
 
-    st.markdown("## 🔒 Blacksand")
+    st.markdown("## 🔒 Social Analyse")
     st.caption("Bitte einloggen.")
     with st.form("bs_login"):
         username = st.text_input("Benutzername") if users else None
